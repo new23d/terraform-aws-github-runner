@@ -12,12 +12,12 @@ resource "aws_lambda_function" "webhook" {
 
   environment {
     variables = {
-      ENVIRONMENT           = var.environment
-      SQS_URL_WEBHOOK       = var.sqs_build_queue.id
-      REPOSITORY_WHITE_LIST = jsonencode(var.repository_white_list)
-      SQS_URL_WEBHOOK       = var.sqs_build_queue.id
-      REPOSITORY_WHITE_LIST = jsonencode(var.repository_white_list)
-      RUNNER_LABELS         = jsonencode(var.runner_extra_labels)
+      ENVIRONMENT               = var.environment
+      KMS_KEY_ID                = var.encryption.kms_key_id
+      GITHUB_APP_WEBHOOK_SECRET = local.github_app_webhook_secret
+      SQS_URL_WEBHOOK           = var.sqs_build_queue.id
+      REPOSITORY_WHITE_LIST     = jsonencode(var.repository_white_list)
+      RUNNER_LABELS             = jsonencode(var.runner_extra_labels)
     }
   }
 
