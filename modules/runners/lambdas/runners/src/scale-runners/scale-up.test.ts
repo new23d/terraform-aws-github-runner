@@ -10,6 +10,7 @@ const mockOctokit = {
   actions: {
     createRegistrationTokenForOrg: jest.fn(),
     createRegistrationTokenForRepo: jest.fn(),
+    getJobForWorkflowRun: jest.fn(),
   },
   apps: {
     getOrgInstallation: jest.fn(),
@@ -30,7 +31,7 @@ const mockCreateClient = mocked(ghAuth.createOctoClient, true);
 
 const TEST_DATA: scaleUpModule.ActionRequestMessage = {
   id: 1,
-  eventType: 'check_run',
+  eventType: 'workflow_job',
   repositoryName: 'hello-world',
   repositoryOwner: 'Codertocat',
   installationId: 2,
@@ -38,7 +39,7 @@ const TEST_DATA: scaleUpModule.ActionRequestMessage = {
 
 const TEST_DATA_WITHOUT_INSTALL_ID: scaleUpModule.ActionRequestMessage = {
   id: 3,
-  eventType: 'check_run',
+  eventType: 'workflow_job',
   repositoryName: 'hello-world',
   repositoryOwner: 'Codertocat',
   installationId: 0,
@@ -68,6 +69,12 @@ beforeEach(() => {
   process.env.RUNNERS_MAXIMUM_COUNT = '3';
   process.env.ENVIRONMENT = 'unit-test-environment';
   process.env.LAUNCH_TEMPLATE_NAME = 'lt-1,lt-2';
+
+  mockOctokit.actions.getJobForWorkflowRun.mockImplementation(() => ({
+    data: {
+      status: 'queued',
+    },
+  }));
 
   mockOctokit.checks.get.mockImplementation(() => ({
     data: {
@@ -126,16 +133,16 @@ describe('scaleUp with GHES', () => {
 
   it('checks queued workflows', async () => {
     await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
-    expect(mockOctokit.checks.get).toBeCalledWith({
-      check_run_id: TEST_DATA.id,
+    expect(mockOctokit.actions.getJobForWorkflowRun).toBeCalledWith({
+      job_id: TEST_DATA.id,
       owner: TEST_DATA.repositoryOwner,
       repo: TEST_DATA.repositoryName,
     });
   });
 
   it('does not list runners when no workflows are queued', async () => {
-    mockOctokit.checks.get.mockImplementation(() => ({
-      data: { total_count: 0, runners: [] },
+    mockOctokit.actions.getJobForWorkflowRun.mockImplementation(() => ({
+      data: { total_count: 0 },
     }));
     await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
     expect(listRunners).not.toBeCalled();
@@ -197,6 +204,11 @@ describe('scaleUp with GHES', () => {
 
     it('creates a runner with correct config', async () => {
       await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
+      expect(createRunner).toBeCalledWith(expectedRunnerParams, 'lt-1');
+    });
+
+    it('creates a runner with legacy event check_run', async () => {
+      await scaleUpModule.scaleUp('aws:sqs', { ...TEST_DATA, eventType: 'check_run' });
       expect(createRunner).toBeCalledWith(expectedRunnerParams, 'lt-1');
     });
 
@@ -339,8 +351,8 @@ describe('scaleUp with public GH', () => {
 
   it('checks queued workflows', async () => {
     await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
-    expect(mockOctokit.checks.get).toBeCalledWith({
-      check_run_id: TEST_DATA.id,
+    expect(mockOctokit.actions.getJobForWorkflowRun).toBeCalledWith({
+      job_id: TEST_DATA.id,
       owner: TEST_DATA.repositoryOwner,
       repo: TEST_DATA.repositoryName,
     });
@@ -363,7 +375,7 @@ describe('scaleUp with public GH', () => {
   });
 
   it('does not list runners when no workflows are queued', async () => {
-    mockOctokit.checks.get.mockImplementation(() => ({
+    mockOctokit.actions.getJobForWorkflowRun.mockImplementation(() => ({
       data: { status: 'completed' },
     }));
     await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
@@ -403,6 +415,11 @@ describe('scaleUp with public GH', () => {
 
     it('creates a runner with correct config', async () => {
       await scaleUpModule.scaleUp('aws:sqs', TEST_DATA);
+      expect(createRunner).toBeCalledWith(expectedRunnerParams, LAUNCH_TEMPLATE);
+    });
+
+    it('creates a runner with legacy event check_run', async () => {
+      await scaleUpModule.scaleUp('aws:sqs', { ...TEST_DATA, eventType: 'check_run' });
       expect(createRunner).toBeCalledWith(expectedRunnerParams, LAUNCH_TEMPLATE);
     });
 
